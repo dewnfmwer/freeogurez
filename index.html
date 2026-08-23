@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🥒 ОГУРЕЦ FM — сваг центр</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Comic Sans MS', 'Segoe UI', sans-serif;
+    background: linear-gradient(-45deg, #1a4d1a, #2e8b2e, #90ee90, #006400);
+    background-size: 400% 400%;
+    animation: градиент 12s ease infinite;
+    min-height: 100vh;
+    overflow-x: hidden;
+    color: #fff;
+  }
+
+  @keyframes градиент {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+  }
+
+  /* летающие огурцы на фоне */
+  .огурец-фон {
+    position: fixed;
+    font-size: 3em;
+    opacity: 0.15;
+    animation: полёт linear infinite;
+    z-index: 0;
+    user-select: none;
+    pointer-events: none;
+  }
+
+  @keyframes полёт {
+    from { transform: translateY(110vh) rotate(0deg); }
+    to { transform: translateY(-20vh) rotate(360deg); }
+  }
+
+  .контейнер {
+    position: relative;
+    z-index: 1;
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 30px 20px;
+    text-align: center;
+  }
+
+  header {
+    margin-bottom: 40px;
+    animation: вжух 1s ease;
+  }
+
+  @keyframes вжух {
+    from { opacity: 0; transform: scale(0.5); }
+    to { opacity: 1; transform: scale(1); }
+  }
+
+  h1 {
+    font-size: clamp(2.5em, 8vw, 5em);
+    text-shadow: 4px 4px 0 #000, 0 0 30px #adff2f;
+    letter-spacing: 3px;
+    animation: качание 3s ease-in-out infinite;
+  }
+
+  @keyframes качание {
+    0%, 100% { transform: rotate(-3deg); }
+    50% { transform: rotate(3deg); }
+  }
+
+  .подзаголовок {
+    font-size: 1.3em;
+    margin-top: 10px;
+    color: #adff2f;
+    text-shadow: 2px 2px 0 #000;
+    font-weight: bold;
+  }
+
+  .блок {
+    background: rgba(0, 0, 0, 0.55);
+    border: 4px solid #adff2f;
+    border-radius: 25px;
+    padding: 30px;
+    margin: 30px 0;
+    box-shadow: 0 0 40px rgba(173, 255, 47, 0.4), inset 0 0 20px rgba(0,0,0,0.5);
+    backdrop-filter: blur(5px);
+    transition: transform 0.3s;
+  }
+
+  .блок:hover { transform: translateY(-5px) scale(1.01); }
+
+  h2 {
+    color: #adff2f;
+    text-shadow: 2px 2px 0 #000;
+    margin-bottom: 20px;
+    font-size: 2em;
+  }
+
+  /* КАЛЬКУЛЯТОР */
+  .кальк-экран {
+    background: #0d1f0d;
+    border: 3px solid #90ee90;
+    border-radius: 12px;
+    padding: 18px;
+    font-size: 2em;
+    text-align: right;
+    min-height: 70px;
+    margin-bottom: 15px;
+    font-family: 'Courier New', monospace;
+    word-break: break-all;
+    color: #adff2f;
+    box-shadow: inset 0 0 15px rgba(0,255,0,0.3);
+  }
+
+  .кальк-кнопки {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+  }
+
+  .кнопка {
+    padding: 18px;
+    font-size: 1.4em;
+    font-weight: bold;
+    border: none;
+    border-radius: 12px;
+    cursor: pointer;
+    background: linear-gradient(145deg, #2e8b2e, #1a4d1a);
+    color: #fff;
+    transition: all 0.1s;
+    box-shadow: 0 4px 0 #052a05;
+  }
+
+  .кнопка:hover { filter: brightness(1.3); }
+  .кнопка:active { transform: translateY(4px); box-shadow: 0 0 0 #052a05; }
+
+  .операция { background: linear-gradient(145deg, #ff8c00, #cc6600); box-shadow: 0 4px 0 #663300; }
+  .равно { background: linear-gradient(145deg, #ff4500, #cc3300); box-shadow: 0 4px 0 #661500; }
+  .очистить { background: linear-gradient(145deg, #dc143c, #aa0a2c); box-shadow: 0 4px 0 #55051a; }
+
+  /* ФАКТЫ */
+  .факт-кнопка {
+    padding: 15px 35px;
+    font-size: 1.3em;
+    font-weight: bold;
+    border: none;
+    border-radius: 50px;
+    cursor: pointer;
+    background: linear-gradient(90deg, #ff4500, #ff8c00);
+    color: #fff;
+    text-shadow: 1px 1px 0 #000;
+    box-shadow: 0 5px 0 #802000;
+    transition: all 0.1s;
+  }
+
+  .факт-кнопка:active { transform: translateY(5px); box-shadow: none; }
+  .факт-кнопка:hover { filter: brightness(1.2); }
+
+  .факт-текст {
+    margin-top: 25px;
+    font-size: 1.4em;
+    min-height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #ffff99;
+    text-shadow: 1px 1px 2px #000;
+  }
+
+  /* ОГУРЕЧНЫЙ СЧЁТЧИК ХРУСТА */
+  .хруст-счётчик {
+    font-size: 3em;
+    font-weight: bold;
+    color: #ffff00;
+    text-shadow: 3px 3px 0 #000;
+    margin: 10px 0;
+  }
+
+  .огурец-клик {
+    font-size: 7em;
+    cursor: pointer;
+    transition: transform 0.1s;
+    user-select: none;
+    display: inline-block;
+    filter: drop-shadow(0 0 20px rgba(173,255,47,0.8));
+    animation: дыхание 2s ease-in-out infinite;
+  }
+
+  @keyframes дыхание {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.08); }
+  }
+
+  .огурец-клик:active { transform: scale(0.85) rotate(-15deg); }
+
+  footer {
+    margin-top: 50px;
+    padding: 20px;
+    font-size: 1.1em;
+    color: #adff2f;
+    text-shadow: 1px 1px 0 #000;
+  }
+
+  .маркиза {
+    overflow: hidden;
+    white-space: nowrap;
+    background: #000;
+    border-top: 3px solid #adff2f;
+    border-bottom: 3px solid #adff2f;
+    padding: 10px 0;
+    font-weight: bold;
+    font-size: 1.2em;
+    color: #adff2f;
+  }
+
+  .маркиза span {
+    display: inline-block;
+    animation: бег 15s linear infinite;
+  }
+
+  @keyframes бег {
+    from { transform: translateX(100vw); }
+    to { transform: translateX(-100%); }
+  }
+</style>
+</head>
+<body>
+
+<div class="маркиза"><span>🥒 ОГУРЕЦ FM 🥒 ХРУСТЬ — ЭТО ЖИЗНЬ 🥒 ЗЕЛЁНЫЙ — ЭТО НОВЫЙ ЧЁРНЫЙ 🥒 СОЛИСЬ ИЛИ УВЯДНИ 🥒 96% ВОДЫ, 100% СВАГА 🥒</span></div>
+
+<div class="контейнер">
+
+  <header>
+    <h1>🥒 ОГУРЕЦ FM 🥒</h1>
+    <div class="подзаголовок">официальный сваг-центр огуречной индустрии</div>
+  </header>
+
+  <div class="блок">
+    <h2>💥 хрусталка 3000</h2>
+    <p>жми на огурец, чуствуй хруст</p>
+    <div class="хруст-счётчик" id="счётчик">хрустов: 0</div>
+    <span class="огурец-клик" id="большойОгурец">🥒</span>
+  </div>
+
+  <div class="блок">
+    <h2>🧮 огуречный калькулятор</h2>
+    <div class="кальк-экран" id="экран">0</div>
+    <div class="кальк-кнопки">
+      <button class="кнопка очистить" onclick="очистить()">C</button>
+      <button class="кнопка" onclick="скобка()">( )</button>
+      <button class="кнопка" onclick="ввод('%')">%</button>
+      <button class="кнопка операция" onclick="ввод('/')">÷</button>
+
+      <button class="кнопка" onclick="ввод('7')">7</button>
+      <button class="кнопка" onclick="ввод('8')">8</button>
+      <button class="кнопка" onclick="ввод('9')">9</button>
+      <button class="кнопка операция" onclick="ввод('*')">×</button>
+
+      <button class="кнопка" onclick="ввод('4')">4</button>
+      <button class="кнопка" onclick="ввод('5')">5</button>
+      <button class="кнопка" onclick="ввод('6')">6</button>
+      <button class="кнопка операция" onclick="ввод('-')">−</button>
+
+      <button class="кнопка" onclick="ввод('1')">1</button>
+      <button class="кнопка" onclick="ввод('2')">2</button>
+      <button class="кнопка" onclick="ввод('3')">3</button>
+      <button class="кнопка операция" onclick="ввод('+')">+</button>
+
+      <button class="кнопка" onclick="ввод('0')">0</button>
+      <button class="кнопка" onclick="ввод('.')">,</button>
+      <button class="кнопка" onclick="стереть()">⌫</button>
+      <button class="кнопка равно" onclick="посчитать()">=</button>
+    </div>
+  </div>
+
+  <div class="блок">
+    <h2>📜 факты про огурцы, которые взорвут тебе мозг</h2>
+    <button class="факт-кнопка" onclick="новыйФакт()">дай факт 🥒</button>
+    <div class="факт-текст" id="факт">жми кнопку и узнавай правду...</div>
+  </div>
+
+  <footer>сделано с любовью и рассолом • огурец всегда прав © 2026</footer>
+</div>
+
+<script>
+  // летающие фоновые огурцы
+  for (let i = 0; i < 15; i++) {
+    const o = document.createElement('div');
+    o.className = 'огурец-фон';
+    o.textContent = '🥒';
+    o.style.left = Math.random() * 100 + 'vw';
+    o.style.animationDuration = (6 + Math.random() * 12) + 's';
+    o.style.animationDelay = -Math.random() * 12 + 's';
+    o.style.fontSize = (2 + Math.random() * 3) + 'em';
+    document.body.appendChild(o);
+  }
+
+  // хрусталка
+  let хрусты = 0;
+  const фразы = ['ХРУСТЬ!', 'КРЯСЬ!', 'ХРЯСЬ!', 'ВКУСНЯТИНА!', 'ЕЩЁ!'];
+  document.getElementById('большойОгурец').onclick = function () {
+    хрусты++;
+    document.getElementById('счётчик').textContent = 'хрустов: ' + хрусты;
+    const п = document.createElement('div');
+    п.textContent = фразы[Math.floor(Math.random() * фразы.length)];
+    п.style.cssText = `position:fixed;left:${this.getBoundingClientRect().left}px;top:${this.getBoundingClientRect().top}px;font-size:2em;font-weight:bold;color:#ff0;text-shadow:2px 2px 0#000;z-index:99;pointer-events:none;transition:all 1s ease-out`;
+    document.body.appendChild(п);
+    requestAnimationFrame(() => {
+      п.style.transform = `translate(${Math.random()*120-60}px, -150px) rotate(${Math.random()*40-20}deg)`;
+      п.style.opacity = '0';
+    });
+    setTimeout(() => п.remove(), 1000);
+    if (хрусты === 50) alert('🥒 50 ХРУСТОВ! ты официально огуречный мастер!');
+    if (хрусты === 100) alert('🥒💯 СТО ХРУСТОВ!! легенда рассольного фронта!!');
+  };
+
+  // калькулятор
+  let выр = '';
+  const экран = document.getElementById('экран');
+
+  function обновить() { экран.textContent = выр || '0'; }
+
+  function ввод(c) {
+    if ('+-*/%'.includes(c)) {
+      if (выр && '+-*/%'.includes(выр.slice(-1))) выр = выр.slice(0, -1);
+      else if (!выр && c !== '-') return;
+    }
+    if (c === '.' && /\.\d*$/.test(выр.split(/[-+*/%]/).pop())) return;
+    выр += c;
+    обновить();
+  }
+
+  function скобка() {
+    const откр = (выр.match(/\(/g) || []).length;
+    const закр = (выр.match(/\)/g) || []).length;
+    if (!выр || '+-*/%('.includes(выр.slice(-1))) выр += '(';
+    else if (закр < откр) выр += ')';
+    else выр += '*(';
+    обновить();
+  }
+
+  function стереть() { выр = выр.slice(0, -1); обновить(); }
+
+  function очистить() { выр = ''; обновить(); }
+
+  function посчитать() {
+    try {
+      if (!/^[-+*/%().\d\s]+$/.test(выр)) throw 0;
+      let р = Function('"use strict";return (' + выр.replace(/%/g, '/100*') + ')')();
+      if (!isFinite(р)) throw 0;
+      р = Math.round(р * 1e10) / 1e10;
+      выр = String(р);
+      обновить();
+    } catch {
+      экран.textContent = 'не огуречно :(';
+      выр = '';
+      setTimeout(обновить, 1200);
+    }
+  }
+
+  // клавиатура для калькулятора
+  document.addEventListener('keydown', e => {
+    if (/[\d+\-*/.%()]/.test(e.key)) ввод(e.key === '%' ? '%' : e.key);
+    else if (e.key === 'Enter') посчитать();
+    else if (e.key === 'Backspace') стереть();
+    else if (e.key === 'Escape') очистить();
+  });
+
+  // факты
+  const факты = [
+    'огурец на 95-96% состоит из воды — это буквально жидкий сваг 💦',
+    'огурцы были окультурены больше 6000 лет назад, древние тоже любили хрустеть',
+    'ботанически огурец — это ягода, да, ты всю жизнь ел ягоду 🤯',
+    'самый длинный огурец вырос почти на 1 метр — абсолютный юнит',
+    'огурец освежает лучше многих напитков — не зря его в воду кидают',
+    'в древнем риме император тиберий требовал огурцы круглый год, первый гик в истории',
+    'хруст огурца слышен из-за тургора клеток — физика в каждый холодильник',
+    'огурец появился раньше большинства стран на карте',
+    'солёные огурцы — это ферментация, то есть пробиотики, то есть забота о кишечнике 🥒💪',
+    'если положить огурец в холодильник рядом с бананом, он пожелтеет быстрее — банан травит его этиленом, вот предатель'
+  ];
+  let инд = -1;
+
+  function новыйФакт() {
+    инд = (инд + 1 + Math.floor(Math.random() * (факты.length - 1))) % факты.length;
+    const эл = document.getElementById('факт');
+    эл.style.opacity = '0';
+    setTimeout(() => {
+      эл.textContent = факты[инд];
+      эл.style.transition = 'opacity 0.4s';
+      эл.style.opacity = '1';
+    }, 200);
+  }
+</script>
+</body>
+</html>
