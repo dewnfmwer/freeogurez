@@ -1,5 +1,5 @@
 name: Alpine Manual Bore Tunnel
-on: workflow_dispatch # Allows you to trigger this manually whenever you want
+on: workflow_dispatch
 
 jobs:
   tunnel-job:
@@ -9,23 +9,23 @@ jobs:
     steps:
       - name: Install and Run Bore
         run: |
-          # 1. Update package manager and install networking/SSH utilities
+          # 1. Обновляем пакеты и ставим утилиты
           apk update && apk add --no-cache curl openssh-server bash
           
-          # 2. Configure and start the SSH server inside the Alpine container
+          # 2. Настраиваем SSH-сервер
           ssh-keygen -A
           echo "root:password123" | chpasswd
           echo "PermitRootLogin yes" >> /etc/ssh/sshd_config
           /usr/sbin/sshd
           
-          # 3. Download the specific Bore client binary for Linux architecture
-          curl -LO https://github.com
-          tar -xzf bore-v0.5.1-x86_64-unknown-linux-musl.tar.gz
+          # 3. Качаем Bore с фиксированным именем файла
+          curl -L -o bore.tar.gz https://github.com/ekzhang/bore/releases/download/v0.6.0/bore-v0.6.0-x86_64-unknown-linux-musl.tar.gz
+          tar -xzf bore.tar.gz
           chmod +x bore
           
-          # 4. Start the bore tunnel pointing to the local SSH port (22) in the background
+          # 4. Запускаем туннель в фоне
           ./bore local 22 --to bore.pub &
           
-          # 5. Keep the runner active so the container doesn't shut down immediately
-          echo "Tunnel started. Keeping the environment alive for 1 hour..."
+          # 5. Держим раннер активным ровно 6 часов (21600 секунд)
+          echo "Туннель запущен. Контейнер будет активен 6 часов..."
           sleep 21600
