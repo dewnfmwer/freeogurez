@@ -1,0 +1,22 @@
+name: macos vnc
+on: 
+  workflow_dispatch: 
+
+jobs:
+  vnc-session:
+    runs-on: macos-latest 
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Turn on Native macOS VNC Server
+      run: |
+        # Включаем встроенную систему Screen Sharing и ставим пароль 'Password123'
+        sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart \
+        -configure -allowAccessFor -allUsers -privs -all
+        sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart \
+        -configure -clientopts -setvnclegacy yes -setvncpw Password123
+        sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart -activate
+
+    - name: Setup Tmate Tunnel
+      uses: mxschmitt/action-tmate@v3 
