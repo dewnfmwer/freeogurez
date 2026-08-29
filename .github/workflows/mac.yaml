@@ -1,38 +1,12 @@
-name: Live macOS VNC (bore.pub)
-
-on:
-  workflow_dispatch:
-
-jobs:
-  vnc-session:
-    runs-on: macos-latest
-    timeout-minutes: 350
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Настраиваем VNC
-        run: |
-          KS=/System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart
-          sudo "$KS" -configure -allowAccessFor -allUsers -privs -all
-          sudo "$KS" -configure -clientopts -setvnclegacy -vnclegacy yes
-          sudo "$KS" -configure -clientopts -setvncpw -vncpw vncpass1
-          sudo "$KS" -activate
-
-          sudo sysadminctl -addUser vncadmin -fullName "VNC Admin" -password 'VncPass123' -admin
-          sudo createhomedir -c -u vncadmin 2>/dev/null || true
-          sudo dscl . -read /Users/vncadmin RecordName || echo "!!! vncadmin не создан"
-
-      - name: Включаем Screen Sharing
-        run: |
-          sudo launchctl enable system/com.apple.screensharing
-          sudo launchctl bootstrap system /System/Library/LaunchDaemons/com.apple.screensharing.plist 2>/dev/null || true
-
-      - name: Выдаём TCC-права (фикс чёрного экрана)
+      - name: Выдаём TCC-права (фикс чёрного экрана, v2)
         run: |
           TCC="/Library/Application Support/com.apple.TCC/TCC.db"
-          sudo sqlite3 "$TCC" <<'SQL'
+          BIN="/System/Library/CoreServices/RemoteManagement/screensharingd.bundle/Contents/MacOS/screensharingd"
+
+          echo "--- Схема таблицы access (если Apple что-то поменяла — увидим) ---"
+          sudo sqlite3 "$TCC" "PRAGMA table_info(access);"
+
+          sudo sqlite3 "$TCC" <<SQL
           INSERT OR REPLACE INTO access
             (service, client, client_type, auth_value, auth_reason, auth_version,
              csreq, policy_id, indirect_object_identifier_type,
@@ -41,49 +15,25 @@ jobs:
             ('kTCCServiceScreenCapture','com.apple.screensharing',0,2,2,1,NULL,NULL,NULL,'UNUSED',NULL,0,strftime('%s','now')),
             ('kTCCServiceListenEvent','com.apple.screensharing',0,2,2,1,NULL,NULL,NULL,'UNUSED',NULL,0,strftime('%s','now')),
             ('kTCCServicePostEvent','com.apple.screensharing',0,2,2,1,NULL,NULL,NULL,'UNUSED',NULL,0,strftime('%s','now')),
+            ('kTCCServiceScreenCapture','$BIN',1,2,2,1,NULL,NULL,NULL,'UNUSED',NULL,0,strftime('%s','now')),
+            ('kTCCServiceListenEvent','$BIN',1,2,2,1,NULL,NULL,NULL,'UNUSED',NULL,0,strftime('%s','now')),
+            ('kTCCServicePostEvent','$BIN',1,2,2,1,NULL,NULL,NULL,'UNUSED',NULL,0,strftime('%s','now')),
             ('kTCCServiceScreenCapture','com.apple.ARDAgent',0,2,2,1,NULL,NULL,NULL,'UNUSED',NULL,0,strftime('%s','now')),
             ('kTCCServicePostEvent','com.apple.ARDAgent',0,2,2,1,NULL,NULL,NULL,'UNUSED',NULL,0,strftime('%s','now'));
           SQL
-          echo "--- Проверка записи ---"
-          sudo sqlite3 "$TCC" "SELECT service, client, auth_value FROM access WHERE client LIKE '%creensharing%' OR client='com.apple.ARDAgent';"
-          # демона перезапускаем, чтобы он перечитал права
+
+          echo "--- Что записалось ---"
+          sudo sqlite3 "$TCC" "SELECT service, client, client_type, auth_value FROM access WHERE client LIKE '%screensharing%' OR client LIKE '%ARDAgent%';"
+
+          # Демон нужно перезапустить, чтобы он перечитал права
           sudo pkill -9 screensharingd 2>/dev/null || true
+          sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart -restart -agent
 
-      - name: Проверяем порт 5900
+      - name: Диагностика GUI-сессии
         run: |
-          ok=0
-          for i in $(seq 1 15); do
-            if nc -z 127.0.0.1 5900 2>/dev/null; then ok=1; break; fi
-            sleep 2
-          done
-          [ $ok -eq 1 ] || { echo "!!! порт 5900 не открывается"; exit 1; }
-          echo "Порт 5900 принимает подключения ✔"
-
-      - name: Ставим bore
-        run: |
-          brew install bore-cli
-          bore --version
-
-      - name: Поднимаем туннель и печатаем адрес
-        run: |
-          nohup bore local 5900 --to bore.pub > /tmp/bore.log 2>&1 &
-          PORT=""
-          for i in $(seq 1 60); do
-            PORT=$(grep -oE 'bore\.pub:[0-9]+' /tmp/bore.log | head -1 | cut -d: -f2)
-            [ -n "$PORT" ] && break
-            sleep 1
-          done
-          [ -z "$PORT" ] && { echo "!!! bore не выдал порт:"; cat /tmp/bore.log; exit 1; }
-          echo "VNC_PORT=$PORT" >> "$GITHUB_ENV"
-          echo "=================================================="
-          echo "  АДРЕС : bore.pub:$PORT"
-          echo "  ПАРОЛЬ: vncpass1  (логин не нужен)"
-          echo "=================================================="
-
-      - name: Держим сессию живой
-        run: |
-          nohup caffeinate -disu >/dev/null 2>&1 &
-          while true; do
-            sleep 300
-            echo "[$(date -u '+%H:%M')] alive: bore.pub:${VNC_PORT}"
-          done
+          echo "=== WindowServer (GUI) ==="
+          pgrep -lx WindowServer || echo "!!! WindowServer НЕ запущен — тогда чёрный экран не от TCC, а от отсутствия GUI-сессии"
+          echo "=== Консольные сессии ==="
+          who || true
+          echo "=== screensharingd ==="
+          pgrep -lx screensharingd || echo "спит (нормально — проснётся при подключении)"
