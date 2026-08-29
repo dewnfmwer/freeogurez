@@ -12,23 +12,42 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Настраиваем VNC (пароль + доступ)
+      - name: Настраиваем VNC
         run: |
           KS=/System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart
-
           sudo "$KS" -configure -allowAccessFor -allUsers -privs -all
           sudo "$KS" -configure -clientopts -setvnclegacy -vnclegacy yes
           sudo "$KS" -configure -clientopts -setvncpw -vncpw vncpass1
           sudo "$KS" -activate
 
-          sudo sysadminctl -addUser vncadmin -password VncPass123 -admin -full_name "VNC Admin"
+          sudo sysadminctl -addUser vncadmin -fullName "VNC Admin" -password 'VncPass123' -admin
           sudo createhomedir -c -u vncadmin 2>/dev/null || true
-          echo "--- проверка юзера ---"
-          sudo dscl . -read /Users/vncadmin RecordName || echo "!!! vncadmin НЕ создан"
+          sudo dscl . -read /Users/vncadmin RecordName || echo "!!! vncadmin не создан"
+
       - name: Включаем Screen Sharing
         run: |
           sudo launchctl enable system/com.apple.screensharing
           sudo launchctl bootstrap system /System/Library/LaunchDaemons/com.apple.screensharing.plist 2>/dev/null || true
+
+      - name: Выдаём TCC-права (фикс чёрного экрана)
+        run: |
+          TCC="/Library/Application Support/com.apple.TCC/TCC.db"
+          sudo sqlite3 "$TCC" <<'SQL'
+          INSERT OR REPLACE INTO access
+            (service, client, client_type, auth_value, auth_reason, auth_version,
+             csreq, policy_id, indirect_object_identifier_type,
+             indirect_object_identifier, indirect_object_code_identity, flags, last_modified)
+          VALUES
+            ('kTCCServiceScreenCapture','com.apple.screensharing',0,2,2,1,NULL,NULL,NULL,'UNUSED',NULL,0,strftime('%s','now')),
+            ('kTCCServiceListenEvent','com.apple.screensharing',0,2,2,1,NULL,NULL,NULL,'UNUSED',NULL,0,strftime('%s','now')),
+            ('kTCCServicePostEvent','com.apple.screensharing',0,2,2,1,NULL,NULL,NULL,'UNUSED',NULL,0,strftime('%s','now')),
+            ('kTCCServiceScreenCapture','com.apple.ARDAgent',0,2,2,1,NULL,NULL,NULL,'UNUSED',NULL,0,strftime('%s','now')),
+            ('kTCCServicePostEvent','com.apple.ARDAgent',0,2,2,1,NULL,NULL,NULL,'UNUSED',NULL,0,strftime('%s','now'));
+          SQL
+          echo "--- Проверка записи ---"
+          sudo sqlite3 "$TCC" "SELECT service, client, auth_value FROM access WHERE client LIKE '%creensharing%' OR client='com.apple.ARDAgent';"
+          # демона перезапускаем, чтобы он перечитал права
+          sudo pkill -9 screensharingd 2>/dev/null || true
 
       - name: Проверяем порт 5900
         run: |
@@ -48,17 +67,14 @@ jobs:
       - name: Поднимаем туннель и печатаем адрес
         run: |
           nohup bore local 5900 --to bore.pub > /tmp/bore.log 2>&1 &
-
           PORT=""
           for i in $(seq 1 60); do
             PORT=$(grep -oE 'bore\.pub:[0-9]+' /tmp/bore.log | head -1 | cut -d: -f2)
             [ -n "$PORT" ] && break
             sleep 1
           done
-
           [ -z "$PORT" ] && { echo "!!! bore не выдал порт:"; cat /tmp/bore.log; exit 1; }
           echo "VNC_PORT=$PORT" >> "$GITHUB_ENV"
-
           echo "=================================================="
           echo "  АДРЕС : bore.pub:$PORT"
           echo "  ПАРОЛЬ: vncpass1  (логин не нужен)"
