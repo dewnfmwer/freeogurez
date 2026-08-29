@@ -6,26 +6,45 @@ on:
 jobs:
   vnc-session:
     runs-on: macos-latest
-    timeout-minutes: 355   # жёсткий лимит macOS-раннера ~6 часов
+    timeout-minutes: 350
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Включаем встроенный VNC-сервер macOS
+      - name: Настраиваем VNC-доступ
         run: |
           KS=/System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart
+
+          # запасной способ входа: логин runner + пароль (если legacy-пароль не сработает)
+          sudo dscl . -passwd /Users/runner VncPass123 || true
 
           sudo "$KS" -configure -allowAccessFor -allUsers -privs -all
           sudo "$KS" -configure -clientopts -setvnclegacy -vnclegacy yes
           sudo "$KS" -configure -clientopts -setvncpw -vncpw vncpass1
-          sudo "$KS" -activate -restart -agent
+          sudo "$KS" -activate
 
-          nohup caffeinate -disu >/dev/null 2>&1 &   # не даём экрану уснуть
-
+      - name: Принудительно запускаем демона Screen Sharing (порт 5900)
+        run: |
+          sudo launchctl enable system/com.apple.screensharing
+          sudo launchctl bootstrap system /System/Library/LaunchDaemons/com.apple.screensharing.plist 2>/dev/null || true
+          sudo launchctl kickstart -k system/com.apple.screensharing || true
           sleep 5
-          echo "--- Проверка порта 5900 ---"
-          lsof -nP -iTCP:5900 -sTCP:LISTEN || { echo "!!! VNC не слушает 5900"; exit 1; }
+
+      - name: Ждём и проверяем порт 5900
+        run: |
+          ok=0
+          for i in $(seq 1 30); do
+            if lsof -nP -iTCP:5900 -sTCP:LISTEN | grep -q LISTEN; then ok=1; break; fi
+            sleep 2
+          done
+          if [ $ok -eq 0 ]; then
+            echo "!!! 5900 не поднялся, диагностика:"
+            sudo launchctl list | grep -iE 'screen|ARD' || true
+            sudo launchctl print system/com.apple.screensharing || true
+            exit 1
+          fi
+          echo "VNC слушает 5900 ✔"
 
       - name: Ставим bore
         run: |
@@ -47,15 +66,14 @@ jobs:
           echo "VNC_PORT=$PORT" >> "$GITHUB_ENV"
 
           echo "========================================================"
-          echo "  VNC-адрес : bore.pub:$PORT"
-          echo "  строка    : vnc://bore.pub:$PORT"
-          echo "  пароль VNC: vncpass1  (логин не нужен)"
+          echo "  VNC адрес : bore.pub:$PORT"
+          echo "  пароль    : vncpass1 (или логин runner / VncPass123)"
           echo "========================================================"
 
       - name: Держим сессию живой
         run: |
-          echo "Сессия работает. Когда закончишь — Cancel workflow."
+          nohup caffeinate -disu >/dev/null 2>&1 &
           while true; do
             sleep 300
-            echo "[$(date -u '+%H:%M:%S')] туннель жив: bore.pub:${VNC_PORT}"
+            echo "[$(date -u '+%H:%M')] alive: bore.pub:${VNC_PORT}"
           done
