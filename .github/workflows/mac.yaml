@@ -21,8 +21,10 @@ jobs:
           sudo "$KS" -configure -clientopts -setvncpw -vncpw vncpass1
           sudo "$KS" -activate
 
-          sudo sysadminctl -addUser vncadmin -password VncPass123 -admin 2>/dev/null || true
-
+          sudo sysadminctl -addUser vncadmin -password VncPass123 -admin -full_name "VNC Admin"
+          sudo createhomedir -c -u vncadmin 2>/dev/null || true
+          echo "--- проверка юзера ---"
+          sudo dscl . -read /Users/vncadmin RecordName || echo "!!! vncadmin НЕ создан"
       - name: Включаем Screen Sharing
         run: |
           sudo launchctl enable system/com.apple.screensharing
