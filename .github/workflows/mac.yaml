@@ -21,8 +21,6 @@ jobs:
           sudo "$KS" -configure -clientopts -setvncpw -vncpw vncpass1
           sudo "$KS" -activate
 
-          # Отдельный админ-юзер (нужен только для входа с Mac через Finder).
-          # dscl -passwd не работает: требует старый пароль -> eDSAuthFailed.
           sudo sysadminctl -addUser vncadmin -password VncPass123 -admin 2>/dev/null || true
 
       - name: Включаем Screen Sharing
@@ -30,9 +28,8 @@ jobs:
           sudo launchctl enable system/com.apple.screensharing
           sudo launchctl bootstrap system /System/Library/LaunchDaemons/com.apple.screensharing.plist 2>/dev/null || true
 
-      - name: Проверяем порт 5900 реальным подключением
+      - name: Проверяем порт 5900
         run: |
-          # НЕ lsof! Демона не будет видно, слушает launchd. Проверяем коннектом:
           ok=0
           for i in $(seq 1 15); do
             if nc -z 127.0.0.1 5900 2>/dev/null; then ok=1; break; fi
@@ -43,7 +40,7 @@ jobs:
 
       - name: Ставим bore
         run: |
-          brew install bore
+          brew install bore-cli
           bore --version
 
       - name: Поднимаем туннель и печатаем адрес
