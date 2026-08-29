@@ -12,46 +12,41 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Настраиваем VNC-доступ
+      - name: Настраиваем VNC (пароль + доступ)
         run: |
           KS=/System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart
-
-          # запасной способ входа: логин runner + пароль (если legacy-пароль не сработает)
-          sudo dscl . -passwd /Users/runner VncPass123 || true
 
           sudo "$KS" -configure -allowAccessFor -allUsers -privs -all
           sudo "$KS" -configure -clientopts -setvnclegacy -vnclegacy yes
           sudo "$KS" -configure -clientopts -setvncpw -vncpw vncpass1
           sudo "$KS" -activate
 
-      - name: Принудительно запускаем демона Screen Sharing (порт 5900)
+          # Отдельный админ-юзер (нужен только для входа с Mac через Finder).
+          # dscl -passwd не работает: требует старый пароль -> eDSAuthFailed.
+          sudo sysadminctl -addUser vncadmin -password VncPass123 -admin 2>/dev/null || true
+
+      - name: Включаем Screen Sharing
         run: |
           sudo launchctl enable system/com.apple.screensharing
           sudo launchctl bootstrap system /System/Library/LaunchDaemons/com.apple.screensharing.plist 2>/dev/null || true
-          sudo launchctl kickstart -k system/com.apple.screensharing || true
-          sleep 5
 
-      - name: Ждём и проверяем порт 5900
+      - name: Проверяем порт 5900 реальным подключением
         run: |
+          # НЕ lsof! Демона не будет видно, слушает launchd. Проверяем коннектом:
           ok=0
-          for i in $(seq 1 30); do
-            if lsof -nP -iTCP:5900 -sTCP:LISTEN | grep -q LISTEN; then ok=1; break; fi
+          for i in $(seq 1 15); do
+            if nc -z 127.0.0.1 5900 2>/dev/null; then ok=1; break; fi
             sleep 2
           done
-          if [ $ok -eq 0 ]; then
-            echo "!!! 5900 не поднялся, диагностика:"
-            sudo launchctl list | grep -iE 'screen|ARD' || true
-            sudo launchctl print system/com.apple.screensharing || true
-            exit 1
-          fi
-          echo "VNC слушает 5900 ✔"
+          [ $ok -eq 1 ] || { echo "!!! порт 5900 не открывается"; exit 1; }
+          echo "Порт 5900 принимает подключения ✔"
 
       - name: Ставим bore
         run: |
           brew install bore
           bore --version
 
-      - name: Поднимаем туннель на bore.pub
+      - name: Поднимаем туннель и печатаем адрес
         run: |
           nohup bore local 5900 --to bore.pub > /tmp/bore.log 2>&1 &
 
@@ -65,10 +60,10 @@ jobs:
           [ -z "$PORT" ] && { echo "!!! bore не выдал порт:"; cat /tmp/bore.log; exit 1; }
           echo "VNC_PORT=$PORT" >> "$GITHUB_ENV"
 
-          echo "========================================================"
-          echo "  VNC адрес : bore.pub:$PORT"
-          echo "  пароль    : vncpass1 (или логин runner / VncPass123)"
-          echo "========================================================"
+          echo "=================================================="
+          echo "  АДРЕС : bore.pub:$PORT"
+          echo "  ПАРОЛЬ: vncpass1  (логин не нужен)"
+          echo "=================================================="
 
       - name: Держим сессию живой
         run: |
