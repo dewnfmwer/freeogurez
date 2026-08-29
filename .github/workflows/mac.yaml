@@ -1,22 +1,61 @@
-name: macos vnc
-on: 
-  workflow_dispatch: 
+name: Live macOS VNC (bore.pub)
+
+on:
+  workflow_dispatch:
 
 jobs:
   vnc-session:
-    runs-on: macos-latest 
+    runs-on: macos-latest
+    timeout-minutes: 355   # жёсткий лимит macOS-раннера ~6 часов
+
     steps:
-    - name: Checkout Code
-      uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-    - name: Turn on Native macOS VNC Server
-      run: |
-        # Включаем встроенную систему Screen Sharing и ставим пароль 'Password123'
-        sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart \
-        -configure -allowAccessFor -allUsers -privs -all
-        sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart \
-        -configure -clientopts -setvnclegacy yes -setvncpw Password123
-        sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart -activate
+      - name: Включаем встроенный VNC-сервер macOS
+        run: |
+          KS=/System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart
 
-    - name: Setup Tmate Tunnel
-      uses: mxschmitt/action-tmate@v3 
+          sudo "$KS" -configure -allowAccessFor -allUsers -privs -all
+          sudo "$KS" -configure -clientopts -setvnclegacy -vnclegacy yes
+          sudo "$KS" -configure -clientopts -setvncpw -vncpw vncpass1
+          sudo "$KS" -activate -restart -agent
+
+          nohup caffeinate -disu >/dev/null 2>&1 &   # не даём экрану уснуть
+
+          sleep 5
+          echo "--- Проверка порта 5900 ---"
+          lsof -nP -iTCP:5900 -sTCP:LISTEN || { echo "!!! VNC не слушает 5900"; exit 1; }
+
+      - name: Ставим bore
+        run: |
+          brew install bore
+          bore --version
+
+      - name: Поднимаем туннель на bore.pub
+        run: |
+          nohup bore local 5900 --to bore.pub > /tmp/bore.log 2>&1 &
+
+          PORT=""
+          for i in $(seq 1 60); do
+            PORT=$(grep -oE 'bore\.pub:[0-9]+' /tmp/bore.log | head -1 | cut -d: -f2)
+            [ -n "$PORT" ] && break
+            sleep 1
+          done
+
+          [ -z "$PORT" ] && { echo "!!! bore не выдал порт:"; cat /tmp/bore.log; exit 1; }
+          echo "VNC_PORT=$PORT" >> "$GITHUB_ENV"
+
+          echo "========================================================"
+          echo "  VNC-адрес : bore.pub:$PORT"
+          echo "  строка    : vnc://bore.pub:$PORT"
+          echo "  пароль VNC: vncpass1  (логин не нужен)"
+          echo "========================================================"
+
+      - name: Держим сессию живой
+        run: |
+          echo "Сессия работает. Когда закончишь — Cancel workflow."
+          while true; do
+            sleep 300
+            echo "[$(date -u '+%H:%M:%S')] туннель жив: bore.pub:${VNC_PORT}"
+          done
