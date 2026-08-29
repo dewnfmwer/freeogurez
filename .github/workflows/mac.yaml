@@ -1,3 +1,34 @@
+name: Live macOS VNC (bore.pub)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  vnc-session:
+    runs-on: macos-latest
+    timeout-minutes: 350
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Настраиваем VNC
+        run: |
+          KS=/System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart
+          sudo "$KS" -configure -allowAccessFor -allUsers -privs -all
+          sudo "$KS" -configure -clientopts -setvnclegacy -vnclegacy yes
+          sudo "$KS" -configure -clientopts -setvncpw -vncpw vncpass1
+          sudo "$KS" -activate
+
+          sudo sysadminctl -addUser vncadmin -fullName "VNC Admin" -password 'VncPass123' -admin
+          sudo createhomedir -c -u vncadmin 2>/dev/null || true
+          sudo dscl . -read /Users/vncadmin RecordName || echo "!!! vncadmin не создан"
+
+      - name: Включаем Screen Sharing
+        run: |
+          sudo launchctl enable system/com.apple.screensharing
+          sudo launchctl bootstrap system /System/Library/LaunchDaemons/com.apple.screensharing.plist 2>/dev/null || true
+
       - name: Выдаём TCC-права (фикс чёрного экрана, v2)
         run: |
           TCC="/Library/Application Support/com.apple.TCC/TCC.db"
@@ -37,3 +68,42 @@
           who || true
           echo "=== screensharingd ==="
           pgrep -lx screensharingd || echo "спит (нормально — проснётся при подключении)"
+
+      - name: Проверяем порт 5900
+        run: |
+          ok=0
+          for i in $(seq 1 15); do
+            if nc -z 127.0.0.1 5900 2>/dev/null; then ok=1; break; fi
+            sleep 2
+          done
+          [ $ok -eq 1 ] || { echo "!!! порт 5900 не открывается"; exit 1; }
+          echo "Порт 5900 принимает подключения ✔"
+
+      - name: Ставим bore
+        run: |
+          brew install bore-cli
+          bore --version
+
+      - name: Поднимаем туннель и печатаем адрес
+        run: |
+          nohup bore local 5900 --to bore.pub > /tmp/bore.log 2>&1 &
+          PORT=""
+          for i in $(seq 1 60); do
+            PORT=$(grep -oE 'bore\.pub:[0-9]+' /tmp/bore.log | head -1 | cut -d: -f2)
+            [ -n "$PORT" ] && break
+            sleep 1
+          done
+          [ -z "$PORT" ] && { echo "!!! bore не выдал порт:"; cat /tmp/bore.log; exit 1; }
+          echo "VNC_PORT=$PORT" >> "$GITHUB_ENV"
+          echo "=================================================="
+          echo "  АДРЕС : bore.pub:$PORT"
+          echo "  ПАРОЛЬ: vncpass1  (логин не нужен)"
+          echo "=================================================="
+
+      - name: Держим сессию живой
+        run: |
+          nohup caffeinate -disu >/dev/null 2>&1 &
+          while true; do
+            sleep 300
+            echo "[$(date -u '+%H:%M')] alive: bore.pub:${VNC_PORT}"
+          done
